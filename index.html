@@ -1095,7 +1095,9 @@ function renderCardBody(c, cls){
   return parts.join("");
 }
 
-const STORE_KEY = "hubRetroBoard_v1";
+/* All samaneha-cmd.github.io pages share ONE browser origin, so they share
+   localStorage too. This key must stay unique to the Hub board. */
+const STORE_KEY = "hubRetroBoard_hub_v2";
 let state = load();
 // safety migration for older saved data
 if(!state.bitrix) state.bitrix={webhook:"https://erp.bugloos.com/rest/865/s1t2blwf2ksrraqn/",groupId:"85",autoPush:true,connected:false,lastSync:null};
@@ -1283,10 +1285,13 @@ async function bxPost(method, params={}){
    Leave both blank to keep using Bitrix24 storage instead. */
 const SUPABASE_URL = "https://hwaelobbpjhfldeaekua.supabase.co";
 const SUPABASE_KEY = "sb_publishable_q77m0ysUs5DxbNDIJLN8Uw_dPrD4Ons";
-const SUPA_ROW = "hub";    // shared row id (one board)
+/* Row id namespaced to this board so it cannot collide with the Company board. */
+const SUPA_ROW = "hub-retro-board";
 
-const CLOUD_KEY="hubRetroState";
+const CLOUD_KEY="hubRetroState_hub";
 let cloudTimer=null, lastAppliedAt=0;
+/* Never push to the cloud before the first successful read. */
+let cloudLoadedOnce=false;
 function supaOn(){ return !!(SUPABASE_URL && SUPABASE_KEY); }
 function cloudEnabled(){ return supaOn() || !!bxBase(); }
 function setSyncBadge(s){
@@ -1335,6 +1340,7 @@ async function supaLoad(){
 function scheduleCloudSave(){
   if(!cloudEnabled()) return;
   clearTimeout(cloudTimer);
+  if(!cloudLoadedOnce){ cloudTimer=setTimeout(scheduleCloudSave, 800); return; }
   cloudTimer=setTimeout(async()=>{
     try{ setSyncBadge("saving"); const snap=contentSnapshot();
       if(supaOn()) await supaSave(snap);
@@ -1351,6 +1357,7 @@ async function cloudLoad(force){
     if(supaOn()){ remote=await supaLoad(); }
     else { const r=await bx("app.option.get"); const raw=r.result && r.result[CLOUD_KEY]; remote=raw?JSON.parse(raw):null; }
     applyRemote(remote);
+    cloudLoadedOnce=true;
     setSyncBadge("synced");
   }catch(e){ setSyncBadge("offline"); }
 }
